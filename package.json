@@ -1,0 +1,32 @@
+{
+  "name": "gltf-ts",
+  "version": "1.0.0",
+  "description": "Generic TypeScript gltf parser free from 3d libs",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RepComm/gltf-ts.git"
+  },
+  "keywords": [
+    "typescript",
+    "esmodules",
+    "babel",
+    "gltf",
+    "parser"
+  ],
+  "author": "Jonathan Crowder",
+  "license": "Unlicense",
+  "bugs": {
+    "url": "https://github.com/RepComm/gltf-ts/issues"
+  },
+  "homepage": "https://github.com/RepComm/gltf-ts#readme",
+  "devDependencies": {
+    "@babel/cli": "^7.10.5",
+    "@babel/core": "^7.10.5",
+    "@babel/plugin-transform-typescript": "^7.10.5",
+    "@babel/preset-env": "^7.10.4"
+  },
+  "scripts": {
+    "build": "babel src --extensions '.ts' --copy-files -d lib"
+  }
+}
