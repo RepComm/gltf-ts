@@ -1,12 +1,19 @@
 
 //Import gltf-ts library es module
-import { GLTF, GLTFAllow2_0, GLTFParseResult } from "./gltf.js";
+import { GLTF, GLTFAllow2_0, GLTFParseResult } from "../../gltf.js";
 
 //Import three for the sake of demo
 import { Scene } from "./libs/three/Three.js";
 
 //Import the demo adapter that parses gltf response to three.Scene
 import { GLTFThreeAdapter } from "./gltf-three-adapter.js";
+
+import Component from "./component.js";
+import Renderer from "./renderer.js";
+import { get, on } from "./aliases.js";
+
+let container = new Component().useNative(get("container"));
+let renderer = new Renderer().mount(container).id("renderer") as Renderer;
 
 //Async function so we can use "await" feature
 async function init() {
@@ -32,11 +39,26 @@ async function init() {
   );
   
   //Makes a scene graph using the demo GLTFThreeAdapter, casts result to Scene
-  let scene: Scene = (
+  let data: any = (
     await result.makeSceneGraph(GLTFThreeAdapter)
-  ) as Scene;
+  );
+  console.log(data);
+  for (let scene of data.scenes) {
+    renderer.getScene().add(scene);
+  }
 
-  console.log(scene);
+  on(window, "resize", ()=>{
+    renderer.resize(container.rect.width, container.rect.height);
+  }, undefined);
+
+  renderer.useDefaultCamera();
+  renderer.camera.position.z = 10;
+
+  renderer.resize(container.rect.width, container.rect.height);
+
+  console.log(renderer.camera);
+  
+  renderer.start();
 }
 
 init();

@@ -63,7 +63,7 @@ export const GLTFThreeAdapter: GLTFParseResultSceneGraphOptions = {
   nodeAddMesh: (node: Mesh, mesh: Geometry) => {
     node.geometry = mesh;
   },
-  nodeAddMaterial: (node: Mesh, material: Material) => {
+  meshAddMaterial: (node: Mesh, material: Material) => {
     node.material = material;
   },
   /**This is where we need to handle creation of mesh data
@@ -84,8 +84,9 @@ export const GLTFThreeAdapter: GLTFParseResultSceneGraphOptions = {
     }
 
     //Non-indexed triangles are a thing, maaan
-    if (data.useIndicies) {
-      result.setIndex(data.indicies);
+    if (data.useindices) {
+      result.setIndex(data.indices);
+      result.setDrawRange(0, data.indices.length/3);
     }
 
     if (data.useNormals) {
@@ -112,5 +113,11 @@ export const GLTFThreeAdapter: GLTFParseResultSceneGraphOptions = {
       metalness: data.pbrMetallicRoughness.metallicFactor,
       color: GLTF.jsonRgbaToNumber(data.pbrMetallicRoughness.baseColorFactor)
     });
+  },
+  getMeshOfNode: (node: Mesh): Geometry | BufferGeometry => {
+    return node.geometry;
+  },
+  sceneAddNode:(scene: Scene, child: Object3D) => {
+    scene.add(child);
   }
 };

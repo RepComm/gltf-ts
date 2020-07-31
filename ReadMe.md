@@ -1,5 +1,7 @@
 # gltf-ts
 
+![img](./example.png)
+
 A typescript GLTF parser (set up to compile to javascript ES Modules w/ babel)
 
 ## Status
@@ -7,8 +9,8 @@ Boiler plate for API is written, but parsing is only 1/4 done<br/>
 Nothing to look at yet.
 
 ## Purpose
-I'm using three.js' GLTFLoader, but converted to esm/es6 classes<br/>
-Unfortunately it still doesn't offer the grainularity I need for my style.<br/>
+I need to load gltf files without depending on any particular scene graph or API, soo
+
 
 This setup is its own implementation of GLTF parser that tries to follow<br/>
 [specification 2.0](https://github.com/KhronosGroup/glTF/blob/master/specification/2.0/README.md)

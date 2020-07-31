@@ -4,6 +4,48 @@ export const BINARY_EXTENSION_HEADER_MAGIC: string = "glTF";
 export const BINARY_EXTENSION_HEADER_LENGTH: number = 12;
 export const BINARY_EXTENSION_CHUNK_TYPES = { JSON: 0x4E4F534A, BIN: 0x004E4942 };
 
+export const WEBGL_CONSTANTS = {
+  FLOAT: 5126,
+  //FLOAT_MAT2: 35674,
+  FLOAT_MAT3: 35675,
+  FLOAT_MAT4: 35676,
+  FLOAT_VEC2: 35664,
+  FLOAT_VEC3: 35665,
+  FLOAT_VEC4: 35666,
+  LINEAR: 9729,
+  REPEAT: 10497,
+  SAMPLER_2D: 35678,
+  POINTS: 0,
+  LINES: 1,
+  LINE_LOOP: 2,
+  LINE_STRIP: 3,
+  TRIANGLES: 4,
+  TRIANGLE_STRIP: 5,
+  TRIANGLE_FAN: 6,
+  UNSIGNED_BYTE: 5121,
+  UNSIGNED_SHORT: 5123
+};
+
+export const WEBGL_TYPE = {
+  5126: Number,
+  //35674: THREE.Matrix2,
+  35675: "Matrix3",
+  35676: "Matrix4",
+  35664: "Vector2",
+  35665: "Vector3",
+  35666: "Vector4",
+  35678: "Texture"
+};
+
+export const GLTF_COMPONENT_TYPE = {
+  "int8": 5120,
+  "uint8": 5121,
+  "int16": 5122,
+  "uint16": 5123,
+  "uint32": 5125,
+  "float32": 5126
+}
+
 export type GLTFId = number;
 
 /**[Red, Green, Blue]*/
@@ -53,7 +95,7 @@ export interface GLTFJsonMeshPrimitive {
   /**Each key's value is the index of the accessor containing attribute's data*/
   attributes: GLTFJsonMeshAttributes;
   /**The index of the accessor that contains mesh indices. When this is not defined, the primitives should be rendered without indices using `drawArrays()`. When defined, the accessor must contain indices: the `bufferView` referenced by the accessor should have a `target` equal to 34963 (ELEMENT_ARRAY_BUFFER); `componentType` must be 5121 (UNSIGNED_BYTE), 5123 (UNSIGNED_SHORT) or 5125 (UNSIGNED_INT), the latter may require enabling additional hardware support; `type` must be `"SCALAR"`. For triangle primitives, the front face has a counter-clockwise (CCW) winding order. Values of the index accessor must not include the maximum value for the given component type, which triggers primitive restart in several graphics APIs and would require client implementations to rebuild the index buffer. Primitive restart values are disallowed and all index values must refer to actual vertices. As a result, the index accessor's values must not exceed the following maxima: BYTE `< 255`, UNSIGNED_SHORT `< 65535`, UNSIGNED_INT `< 4294967295`*/
-  indicies: GLTFId;
+  indices: GLTFId;
   /**The index of the material to apply to this primitive when rendering*/
   material: GLTFId;
 }
@@ -87,6 +129,10 @@ export interface GLTFJsonNode {
   mesh: GLTFId;
   /**The name of this node, not unique*/
   name: string;
+  /**The indices of each child node*/
+  children: Array<GLTFId>;
+  /**number[x, y, z]*/
+  translation: number[];
 }
 
 export interface GLTFJsonScene {
@@ -126,8 +172,8 @@ export interface GLTFJson {
 export interface MeshCreationData {
   usePositions: boolean;
   positions: number[] | undefined;
-  useIndicies: boolean;
-  indicies: number[] | undefined;
+  useindices: boolean;
+  indices: number[] | undefined;
   useNormals: boolean;
   normals: number[] | undefined;
   useColors: boolean;
@@ -138,6 +184,7 @@ export interface MeshCreationData {
 
 export interface GLTFParseResultSceneGraphOptions {
   sceneCreate: (data: GLTFJsonScene) => any;
+  sceneAddNode: (scene: any, child: any) => void;
   /**Pass in your code for creating a node in the graph, must return the node!
    * @returns node created by your code
    */
@@ -146,9 +193,10 @@ export interface GLTFParseResultSceneGraphOptions {
   nodeRotate: (node: any, x: number, y: number, z: number, w: number) => void;
   nodeParent: (parent: any, child: any) => void;
   nodeAddMesh: (node: any, mesh: any) => void;
-  nodeAddMaterial: (node: any, material: any) => void;
+  meshAddMaterial: (node: any, mesh: any, material: any) => void;
   meshCreate: (data: MeshCreationData) => any;
   materialCreate: (data: GLTFJsonMaterial) => any;
+  getMeshOfNode: (node: any) => any;
 }
 
 export class _GLTFAccessor {
@@ -158,12 +206,52 @@ export class _GLTFAccessor {
   //TODO - read up on whatever the heck min and max do
   min: number[];
   max: number[];
-  constructor (jsonDef: GLTFJsonAccessor) {
-    //TODO - convert componentType to something normal..
+  constructor(jsonDef: GLTFJsonAccessor) {
     this.componentType = jsonDef.componentType;
     this.count = jsonDef.count;
     this.min = jsonDef.min;
     this.max = jsonDef.max;
+  }
+  getAllValues(): Array<number> {
+    let result: number[] = new Array(this.count);
+    switch (this.componentType) {
+      case GLTF_COMPONENT_TYPE.float32:
+        for (let i = 0; i < this.count; i++) {
+          //TODO - buffer flip i guess, three js might be stupid
+          result[i] = this.dataView.getFloat32(i * Float32Array.BYTES_PER_ELEMENT, true);
+        }
+        break;
+      case GLTF_COMPONENT_TYPE.int16:
+        for (let i = 0; i < this.count; i++) {
+          result[i] = this.dataView.getInt16(i * Int16Array.BYTES_PER_ELEMENT, true);
+        }
+        break;
+      case GLTF_COMPONENT_TYPE.int8:
+        for (let i = 0; i < this.count; i++) {
+          result[i] = this.dataView.getInt8(i * Int8Array.BYTES_PER_ELEMENT);
+        }
+        break;
+      case GLTF_COMPONENT_TYPE.uint16:
+        for (let i = 0; i < this.count; i++) {
+          result[i] = this.dataView.getUint16(i * Uint16Array.BYTES_PER_ELEMENT, true);
+        }
+        break;
+      case GLTF_COMPONENT_TYPE.uint32:
+        for (let i = 0; i < this.count; i++) {
+          result[i] = this.dataView.getUint32(i * Uint32Array.BYTES_PER_ELEMENT, true);
+        }
+        break;
+      case GLTF_COMPONENT_TYPE.uint8:
+        for (let i = 0; i < this.count; i++) {
+          result[i] = this.dataView.getUint8(i * Uint8Array.BYTES_PER_ELEMENT);
+        }
+        break;
+      default:
+        throw `Unhandled component type ${this.componentType}`;
+        break;
+    }
+
+    return result;
   }
 }
 
@@ -172,11 +260,20 @@ export class GLTFParseResult {
   /**Construct the scene graph, passing in your own code for the low level stuff*/
   makeSceneGraph(options: GLTFParseResultSceneGraphOptions): Promise<any> {
     return new Promise(async (resolve, reject) => {
-      this.json.scenes.forEach(options.sceneCreate);
-      this.json.materials.forEach(options.materialCreate);
+      let scenes: any[] = new Array(this.json.scenes.length);
+      for (let i = 0; i < scenes.length; i++) {
+        let def = this.json.scenes[i];
+        scenes[i] = options.sceneCreate(def);
+      }
+
+      let materials: any[] = new Array(this.json.materials.length);
+      for (let i = 0; i < materials.length; i++) {
+        let def = this.json.materials[i];
+        materials[i] = options.materialCreate(def);
+      }
 
       let buffers = new Array<ArrayBuffer>(this.json.buffers.length);
-      for (let i=0; i<this.json.buffers.length; i++) {
+      for (let i = 0; i < buffers.length; i++) {
         //TODO - make sure this handles URLs correctly
         let def = this.json.buffers[i];
         let resp = await fetch(def.uri);
@@ -184,57 +281,126 @@ export class GLTFParseResult {
       }
 
       let bufferViews = new Array<DataView>(this.json.bufferViews.length);
-      for (let i=0; i<this.json.bufferViews.length; i++) {
+      for (let i = 0; i < bufferViews.length; i++) {
         let def = this.json.bufferViews[i];
         bufferViews[i] = new DataView(
-          buffers[def.buffer]
+          buffers[def.buffer],
+          def.byteOffset,
+          def.byteLength
         );
       }
 
       let accessors = new Array<_GLTFAccessor>(this.json.accessors.length);
-      this.json.accessors.forEach((json, index)=>{
-        let accessor = new _GLTFAccessor(json);
-        accessor.dataView = bufferViews[json.bufferView];
-        accessors[index] = accessor;
-      });
+      for (let i=0; i<accessors.length; i++) {
+        let def = this.json.accessors[i];
+        let accessor = new _GLTFAccessor(def);
+        accessor.dataView = bufferViews[def.bufferView];
+        accessors[i] = accessor;
+      }
 
-      this.json.meshes.forEach((json) => {
+      let meshes: any[] = new Array(this.json.meshes.length);
+      console.log(this.json);
+      for (let i = 0; i < meshes.length; i++) {
+        let def = this.json.meshes[i];
         //TODO - handle multiple primitives!
-        let prim = json.primitives[0];
+        let prim = def.primitives[0];
+
+        console.log(def);
+
+        let useindices: boolean = (prim.indices !== undefined && prim.indices !== null);
+
         let positionAccessor = accessors[prim.attributes.POSITION];
         let normalAccessor = accessors[prim.attributes.NORMAL];
         let uvAccessor = accessors[prim.attributes.TEXCOORD_0];
+        let indicesAccessor: _GLTFAccessor;
+        if (useindices) indicesAccessor = accessors[prim.indices];
 
-        //TODO - grab values from _GLTFAccessor s and dump into attributes
+        let positions = positionAccessor.getAllValues();
+        let normals = normalAccessor.getAllValues();
+        let indices: number[];
 
-        let positions: number[];
-        let normals: number[];
-        let indicies: number[];
-        let colors: number[];
-        let uvs: number[];
+        if (useindices) indices = indicesAccessor.getAllValues();
+        
+        let colors: number[];//TODO - handle colors
+        let uvs = uvAccessor.getAllValues();
 
-        let useIndicies: boolean = (prim.indicies !== undefined && prim.indicies !== null);
         let data: MeshCreationData = {
           usePositions: true,
-          useIndicies: useIndicies,
+          useindices: useindices,
           useNormals: true,
           useColors: false, // TODO - handle colors
           useUvs: true,
           positions: positions,
           normals: normals,
-          indicies: indicies,
+          indices: indices,
           colors: colors,
           uvs: uvs
         };
-        options.meshCreate(data);
-      });
+        meshes[i] = options.meshCreate(data);
+      }
+
+      let nodes: any[] = new Array(this.json.nodes.length);
+      for (let i = 0; i < nodes.length; i++) {
+        let def = this.json.nodes[i];
+        nodes[i] = options.nodeCreate(def.name, def.mesh != undefined);
+      }
+
+      for (let i = 0; i < nodes.length; i++) {
+        let def = this.json.nodes[i];
+        let node = nodes[i];
+        let mesh = meshes[def.mesh];
+
+        if (def.translation) {
+          options.nodeTranslate(
+            node,
+            def.translation[0],
+            def.translation[1],
+            def.translation[2]
+          )
+        }
+
+        options.nodeAddMesh(
+          node, mesh
+        );
+
+        //Add parent's children
+        if (def.children) {
+          for (let ind of def.children) {
+            options.nodeParent(
+              node, nodes[ind]
+            );
+          }
+        }
+
+        //TODO - handle materials.. hair rip out
+        // options.meshAddMaterial(
+        //   node, mesh, materials[  ]
+        // )
+      }
+
+      //Add nodes to respective scenes
+      for (let i = 0; i < scenes.length; i++) {
+        let def = this.json.scenes[i];
+        let scene = scenes[i];
+
+        for (let ind of def.nodes) {
+          options.sceneAddNode(
+            scene, nodes[ind]
+          );
+        }
+      }
 
       //options.nodeAddMaterial
-      //options.nodeAddMesh
-      //options.nodeCreate
       //options.nodeParent
       //options.nodeRotate
-      //options.nodeTranslate
+
+      resolve({
+        meshes,
+        nodes,
+        scenes,
+        materials,
+        accessors
+      });
     });
   }
 }
