@@ -12,5 +12,8 @@
       }
     ]
   ],
+  "ignore": [
+    "./src/examples/threejs/libs/three/*"
+  ],
   "plugins": ["@babel/plugin-transform-typescript"]
 }

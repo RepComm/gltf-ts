@@ -123,8 +123,120 @@ export interface GLTFJson {
   buffers: Array<GLTFJsonBuffer>;
 }
 
-export interface GLTFParseResult {
+export interface MeshCreationData {
+  usePositions: boolean;
+  positions: number[] | undefined;
+  useIndicies: boolean;
+  indicies: number[] | undefined;
+  useNormals: boolean;
+  normals: number[] | undefined;
+  useColors: boolean;
+  colors: number[] | undefined;
+  useUvs: boolean;
+  uvs: number[] | undefined;
+}
+
+export interface GLTFParseResultSceneGraphOptions {
+  sceneCreate: (data: GLTFJsonScene) => any;
+  /**Pass in your code for creating a node in the graph, must return the node!
+   * @returns node created by your code
+   */
+  nodeCreate: (name: string, hasMesh: boolean) => any;
+  nodeTranslate: (node: any, x: number, y: number, z: number) => void;
+  nodeRotate: (node: any, x: number, y: number, z: number, w: number) => void;
+  nodeParent: (parent: any, child: any) => void;
+  nodeAddMesh: (node: any, mesh: any) => void;
+  nodeAddMaterial: (node: any, material: any) => void;
+  meshCreate: (data: MeshCreationData) => any;
+  materialCreate: (data: GLTFJsonMaterial) => any;
+}
+
+export class _GLTFAccessor {
+  dataView: DataView;
+  componentType: number;
+  count: number;
+  //TODO - read up on whatever the heck min and max do
+  min: number[];
+  max: number[];
+  constructor (jsonDef: GLTFJsonAccessor) {
+    //TODO - convert componentType to something normal..
+    this.componentType = jsonDef.componentType;
+    this.count = jsonDef.count;
+    this.min = jsonDef.min;
+    this.max = jsonDef.max;
+  }
+}
+
+export class GLTFParseResult {
   json: GLTFJson;
+  /**Construct the scene graph, passing in your own code for the low level stuff*/
+  makeSceneGraph(options: GLTFParseResultSceneGraphOptions): Promise<any> {
+    return new Promise(async (resolve, reject) => {
+      this.json.scenes.forEach(options.sceneCreate);
+      this.json.materials.forEach(options.materialCreate);
+
+      let buffers = new Array<ArrayBuffer>(this.json.buffers.length);
+      for (let i=0; i<this.json.buffers.length; i++) {
+        //TODO - make sure this handles URLs correctly
+        let def = this.json.buffers[i];
+        let resp = await fetch(def.uri);
+        buffers[i] = await resp.arrayBuffer();
+      }
+
+      let bufferViews = new Array<DataView>(this.json.bufferViews.length);
+      for (let i=0; i<this.json.bufferViews.length; i++) {
+        let def = this.json.bufferViews[i];
+        bufferViews[i] = new DataView(
+          buffers[def.buffer]
+        );
+      }
+
+      let accessors = new Array<_GLTFAccessor>(this.json.accessors.length);
+      this.json.accessors.forEach((json, index)=>{
+        let accessor = new _GLTFAccessor(json);
+        accessor.dataView = bufferViews[json.bufferView];
+        accessors[index] = accessor;
+      });
+
+      this.json.meshes.forEach((json) => {
+        //TODO - handle multiple primitives!
+        let prim = json.primitives[0];
+        let positionAccessor = accessors[prim.attributes.POSITION];
+        let normalAccessor = accessors[prim.attributes.NORMAL];
+        let uvAccessor = accessors[prim.attributes.TEXCOORD_0];
+
+        //TODO - grab values from _GLTFAccessor s and dump into attributes
+
+        let positions: number[];
+        let normals: number[];
+        let indicies: number[];
+        let colors: number[];
+        let uvs: number[];
+
+        let useIndicies: boolean = (prim.indicies !== undefined && prim.indicies !== null);
+        let data: MeshCreationData = {
+          usePositions: true,
+          useIndicies: useIndicies,
+          useNormals: true,
+          useColors: false, // TODO - handle colors
+          useUvs: true,
+          positions: positions,
+          normals: normals,
+          indicies: indicies,
+          colors: colors,
+          uvs: uvs
+        };
+        options.meshCreate(data);
+      });
+
+      //options.nodeAddMaterial
+      //options.nodeAddMesh
+      //options.nodeCreate
+      //options.nodeParent
+      //options.nodeRotate
+      //options.nodeTranslate
+    });
+  }
 }
 
 export interface GLTFParseOptionsAllowVersionCallback {
@@ -136,7 +248,6 @@ export interface GLTFParseOptions {
 }
 
 export const GLTFAllow2_0 = (v: string, vn: number) => {
-  console.log("Version str", v, "as num", vn);
   return vn >= 2;
 }
 
@@ -183,7 +294,7 @@ export class GLTF {
         reject("GLB not handled yet");
         return;
       } else {
-        resolve (await GLTF.parseText(textDec.decode(data), options));
+        resolve(await GLTF.parseText(textDec.decode(data), options));
         return;
       }
     });
@@ -191,9 +302,7 @@ export class GLTF {
   /**Parses loaded in json data gltf*/
   static parseJson(gltfJson: GLTFJson, options: GLTFParseOptions): Promise<GLTFParseResult> {
     return new Promise((resolve, reject) => {
-      let result: GLTFParseResult = {
-        json:undefined
-      };
+      let result: GLTFParseResult = new GLTFParseResult();
 
       //Reject versions that options don't support
       if (!options.allowVersion(
@@ -226,5 +335,63 @@ export class GLTF {
       if (!result) return;
       resolve(result);
     });
+  }
+  /**Converts number[r, g, b] to unsigned int
+   * @param rgba
+   * @returns numerical representation of color as unsigned integer
+   * 
+   * jsonRgbaToNumber([
+   *  255, 0, 255
+   * ]).toString(16);
+   * //Outputs "ff00ffff"
+   */
+  static jsonRgbToNumber(rgb: GLTFJsonRGB): number {
+    /**OK, witchcraft time
+     * Bitshift left 24 (red value here) will result in
+     * output wrapping around in binary (signed)
+     * We want it to be unsigned
+     * 
+     * You can do >>> to bitshift right to get UNSIGNED result
+     * Unfortunately there is no equivalent for left shift..
+     * 
+     * SO, let it wrap, then unsign it with >>> 0
+    */
+    return (
+      //Shift red value over 3 bytes to the right
+      rgb[0] << 24 | //bit 'or' with next value
+
+      //Shift green value over 2 bytes to the right
+      rgb[1] << 16 | //bit 'or' with next value
+
+      //Shift blue value over 1 byte to the right
+      rgb[2] << 8 | //bit 'or' with next value
+
+      //Full alpha
+      255
+    ) >>> 0; // ">>> 0" unsigns number
+  }
+  /**Converts number[r, g, b, a] to unsigned int
+   * @param rgba
+   * @returns numerical representation of color as unsigned integer
+   * 
+   * jsonRgbaToNumber([
+   *  255, 0, 255, 0
+   * ]).toString(16);
+   * //Outputs "ff00ff00"
+   */
+  static jsonRgbaToNumber(rgba: GLTFJsonRGBA): number {
+    return (
+      //Shift red value over 3 bytes to the right
+      rgba[0] << 24 | //bit 'or' with next value
+
+      //Shift green value over 2 bytes to the right
+      rgba[1] << 16 | //bit 'or' with next value
+
+      //Shift blue value over 1 byte to the right
+      rgba[2] << 8 | //bit 'or' with next value
+
+      //alpha value
+      rgba[3]
+    ) >>> 0;
   }
 }

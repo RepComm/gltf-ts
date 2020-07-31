@@ -6,16 +6,47 @@
   "scene": 0,
   "scenes": [
     {
+      "extras": {
+        "glTF2ExportSettings": {
+          "export_animations": 0,
+          "export_extras": 1,
+          "export_format": "GLTF_EMBEDDED",
+          "export_morph": 0,
+          "export_skins": 0
+        }
+      },
       "name": "Scene",
       "nodes": [
-        0
+        2
       ]
     }
   ],
   "nodes": [
     {
+      "name": "three",
+      "translation": [
+        1,
+        1,
+        -1
+      ]
+    },
+    {
+      "children": [
+        0
+      ],
       "mesh": 0,
-      "name": "Cube"
+      "name": "two",
+      "translation": [
+        1,
+        1,
+        -1
+      ]
+    },
+    {
+      "children": [
+        1
+      ],
+      "name": "one"
     }
   ],
   "materials": [
@@ -41,7 +72,7 @@
   ],
   "meshes": [
     {
-      "name": "Cube",
+      "name": "two-mesh",
       "primitives": [
         {
           "attributes": {

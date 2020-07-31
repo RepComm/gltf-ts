@@ -28,5 +28,6 @@
   },
   "scripts": {
     "build": "babel src --extensions '.ts' --copy-files -d lib"
-  }
+  },
+  "dependencies": {}
 }
