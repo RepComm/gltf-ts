@@ -104,6 +104,7 @@ export interface GLTFJsonMesh {
   /**The name of this mesh*/
   name: string;
   primitives: Array<GLTFJsonMeshPrimitive>;
+  material: GLTFId;
 }
 
 export interface GLTFJsonPBRMetallicRoughness {
@@ -133,6 +134,8 @@ export interface GLTFJsonNode {
   children: Array<GLTFId>;
   /**number[x, y, z]*/
   translation: number[];
+  /**number[x, y, z, w]*/
+  rotation: number[];
 }
 
 export interface GLTFJsonScene {
@@ -192,8 +195,8 @@ export interface GLTFParseResultSceneGraphOptions {
   nodeTranslate: (node: any, x: number, y: number, z: number) => void;
   nodeRotate: (node: any, x: number, y: number, z: number, w: number) => void;
   nodeParent: (parent: any, child: any) => void;
-  nodeAddMesh: (node: any, mesh: any) => void;
-  meshAddMaterial: (node: any, mesh: any, material: any) => void;
+  nodeAddMesh: (node: any, mesh: any, mat: any) => void;
+  // meshAddMaterial: (mesh: any, material: any) => void;
   meshCreate: (data: MeshCreationData) => any;
   materialCreate: (data: GLTFJsonMaterial) => any;
   getMeshOfNode: (node: any) => any;
@@ -291,7 +294,7 @@ export class GLTFParseResult {
       }
 
       let accessors = new Array<_GLTFAccessor>(this.json.accessors.length);
-      for (let i=0; i<accessors.length; i++) {
+      for (let i = 0; i < accessors.length; i++) {
         let def = this.json.accessors[i];
         let accessor = new _GLTFAccessor(def);
         accessor.dataView = bufferViews[def.bufferView];
@@ -299,13 +302,10 @@ export class GLTFParseResult {
       }
 
       let meshes: any[] = new Array(this.json.meshes.length);
-      console.log(this.json);
       for (let i = 0; i < meshes.length; i++) {
         let def = this.json.meshes[i];
         //TODO - handle multiple primitives!
         let prim = def.primitives[0];
-
-        console.log(def);
 
         let useindices: boolean = (prim.indices !== undefined && prim.indices !== null);
 
@@ -320,7 +320,7 @@ export class GLTFParseResult {
         let indices: number[];
 
         if (useindices) indices = indicesAccessor.getAllValues();
-        
+
         let colors: number[];//TODO - handle colors
         let uvs = uvAccessor.getAllValues();
 
@@ -350,6 +350,18 @@ export class GLTFParseResult {
         let node = nodes[i];
         let mesh = meshes[def.mesh];
 
+        let mat;
+        if (def.mesh != undefined) {
+          let meshDef = this.json.meshes[def.mesh];
+          let primDef0 = meshDef.primitives[0];
+
+          console.log("Mesh def", meshDef);
+          if (primDef0.material != undefined) {
+            mat = materials[primDef0.material];
+            console.log("Material used", mat);
+          }
+        }
+
         if (def.translation) {
           options.nodeTranslate(
             node,
@@ -359,8 +371,19 @@ export class GLTFParseResult {
           )
         }
 
+        if (def.rotation) {
+          options.nodeRotate(
+            node,
+            def.rotation[0],
+            def.rotation[1],
+            def.rotation[2],
+            def.rotation[3]
+          );
+        }
+
+        //And then it dawned on me, just send material with the mesh!
         options.nodeAddMesh(
-          node, mesh
+          node, mesh, mat
         );
 
         //Add parent's children
@@ -371,13 +394,7 @@ export class GLTFParseResult {
             );
           }
         }
-
-        //TODO - handle materials.. hair rip out
-        // options.meshAddMaterial(
-        //   node, mesh, materials[  ]
-        // )
       }
-
       //Add nodes to respective scenes
       for (let i = 0; i < scenes.length; i++) {
         let def = this.json.scenes[i];
@@ -389,11 +406,6 @@ export class GLTFParseResult {
           );
         }
       }
-
-      //options.nodeAddMaterial
-      //options.nodeParent
-      //options.nodeRotate
-
       resolve({
         meshes,
         nodes,

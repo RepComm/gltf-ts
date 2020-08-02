@@ -10,10 +10,11 @@ import {
   BufferAttribute,
   Float32BufferAttribute,
   DoubleSide,
-  FrontSide
+  FrontSide,
+  Color
 } from "./libs/three/Three.js";
 
-import { GLTFParseResultSceneGraphOptions, GLTF } from "../../gltf.js";
+import { GLTFParseResultSceneGraphOptions } from "../../gltf.js";
 
 export const GLTFThreeAdapter: GLTFParseResultSceneGraphOptions = {
   sceneCreate:(data): Scene => {
@@ -60,11 +61,9 @@ export const GLTFThreeAdapter: GLTFParseResultSceneGraphOptions = {
     parent.add(child);
   },
   /**Redeclare node as Mesh, and mesh as Geometry (three.js naming conventions mah dude)*/
-  nodeAddMesh: (node: Mesh, mesh: Geometry) => {
+  nodeAddMesh: (node: Mesh, mesh: Geometry, mat: Material) => {
     node.geometry = mesh;
-  },
-  meshAddMaterial: (node: Mesh, material: Material) => {
-    node.material = material;
+    if (mat) node.material = mat;
   },
   /**This is where we need to handle creation of mesh data
    * Redeclare result as Geometry or BufferGeometry so
@@ -105,13 +104,16 @@ export const GLTFThreeAdapter: GLTFParseResultSceneGraphOptions = {
     return result;
   },
   materialCreate: (data): Material => {
+    let color = data.pbrMetallicRoughness.baseColorFactor;
+    let emissive = data.emissiveFactor;
+    console.log(color);
     return new MeshStandardMaterial({
       side: data.doubleSided ? DoubleSide : FrontSide,
-      emissive: GLTF.jsonRgbToNumber(data.emissiveFactor),
+      emissive: new Color(emissive[0], emissive[1], emissive[2]),
       name: data.name,
       roughness: data.pbrMetallicRoughness.roughnessFactor,
       metalness: data.pbrMetallicRoughness.metallicFactor,
-      color: GLTF.jsonRgbaToNumber(data.pbrMetallicRoughness.baseColorFactor)
+      color: new Color(color[0], color[1], color[2])
     });
   },
   getMeshOfNode: (node: Mesh): Geometry | BufferGeometry => {

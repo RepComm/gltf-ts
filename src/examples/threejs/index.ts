@@ -3,7 +3,7 @@
 import { GLTF, GLTFAllow2_0, GLTFParseResult } from "../../gltf.js";
 
 //Import three for the sake of demo
-import { Scene } from "./libs/three/Three.js";
+import { DirectionalLight } from "./libs/three/Three.js";
 
 //Import the demo adapter that parses gltf response to three.Scene
 import { GLTFThreeAdapter } from "./gltf-three-adapter.js";
@@ -37,17 +37,21 @@ async function init() {
       allowVersion: GLTFAllow2_0 //can pass in your own version allow callback here
     }
   );
-  
+
   //Makes a scene graph using the demo GLTFThreeAdapter, casts result to Scene
   let data: any = (
     await result.makeSceneGraph(GLTFThreeAdapter)
   );
-  console.log(data);
   for (let scene of data.scenes) {
     renderer.getScene().add(scene);
   }
 
-  on(window, "resize", ()=>{
+  let dirLight = new DirectionalLight(0xffffff, 0.9);
+  renderer.getScene().add(dirLight);
+
+  console.log(dirLight);
+
+  on(window, "resize", () => {
     renderer.resize(container.rect.width, container.rect.height);
   }, undefined);
 
@@ -56,8 +60,6 @@ async function init() {
 
   renderer.resize(container.rect.width, container.rect.height);
 
-  console.log(renderer.camera);
-  
   renderer.start();
 }
 
